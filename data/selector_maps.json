@@ -1,0 +1,27 @@
+{
+  "ncs": {
+    "staff_login": {
+      "email": "input[type=\"email\"], input[name=\"email\"], input[autocomplete=\"username\"]",
+      "password": "input[type=\"password\"], input[name=\"password\"], input[autocomplete=\"current-password\"]",
+      "submit": "button[type=\"submit\"]"
+    },
+    "patient_scan": {
+      "manual_trigger": ".patient-scan-shell__manual-trigger",
+      "token": "input[type=\"text\"]",
+      "submit": "button[type=\"submit\"]"
+    },
+    "patient_welcome": {
+      "help_link": "a[href=\"#/patient/services\"]"
+    },
+    "patient_services": {
+      "service_card": ".patient-service-card",
+      "confirm_submit": ".q-dialog .bg-primary, .q-dialog button[type=\"submit\"]"
+    },
+    "nurse_calls": {
+      "page_ready": "body"
+    },
+    "global": {
+      "page_ready": "body"
+    }
+  }
+}

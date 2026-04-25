@@ -1,0 +1,55 @@
+{
+  "base_url": "http://127.0.0.1:9200",
+  "chrome_path": "",
+  "default_launch_mode": "browser",
+  "default_window_size": "1400,940",
+  "default_new_window": true,
+  "default_positioning": {
+    "split_lr": [
+      {
+        "x": 0,
+        "y": 0,
+        "width": 960,
+        "height": 1040
+      },
+      {
+        "x": 960,
+        "y": 0,
+        "width": 960,
+        "height": 1040
+      }
+    ],
+    "grid_2x2": [
+      {
+        "x": 0,
+        "y": 0,
+        "width": 960,
+        "height": 520
+      },
+      {
+        "x": 960,
+        "y": 0,
+        "width": 960,
+        "height": 520
+      },
+      {
+        "x": 0,
+        "y": 520,
+        "width": 960,
+        "height": 520
+      },
+      {
+        "x": 960,
+        "y": 520,
+        "width": 960,
+        "height": 520
+      }
+    ]
+  },
+  "current_project": "ncs",
+  "artifacts_open_after_run": false,
+  "headless_automation": false,
+  "automation_timeout_ms": 15000,
+  "keep_windows_open_after_run": false,
+  "screenshot_settle_ms": 250
+}

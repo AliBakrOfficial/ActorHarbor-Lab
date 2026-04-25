@@ -1,0 +1,10 @@
+[
+  {
+    "id": "ncs",
+    "name": "Nursing Call System",
+    "adapter": "ncs",
+    "description": "Seeded local multi-role rehearsal adapter for the NCS demo environment.",
+    "base_url": "http://127.0.0.1:9200",
+    "api_base_url": "http://127.0.0.1:8000/api/v1"
+  }
+]

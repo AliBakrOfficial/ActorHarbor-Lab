@@ -1,0 +1,325 @@
+[
+  {
+    "id": "patient-er101a",
+    "project_id": "ncs",
+    "name": "Patient ER-101-A",
+    "preset_id": "patient-er101a",
+    "kind": "patient",
+    "role": "patient",
+    "route": "#/patient/scan",
+    "base_route": "#/patient/scan",
+    "landing_route": "#/patient/welcome",
+    "launch_mode": "browser",
+    "login_email": "",
+    "login_password": "",
+    "qr_token": "DEMO-ER-101-A",
+    "locale": "en-US",
+    "theme": "system",
+    "tags": [
+      "patient",
+      "qr",
+      "emergency"
+    ],
+    "notes": "",
+    "metadata": {
+      "bed_label": "ER-101-A",
+      "scope": ""
+    }
+  },
+  {
+    "id": "patient-er101b",
+    "project_id": "ncs",
+    "name": "Patient ER-101-B",
+    "preset_id": "patient-er101b",
+    "kind": "patient",
+    "role": "patient",
+    "route": "#/patient/scan",
+    "base_route": "#/patient/scan",
+    "landing_route": "#/patient/welcome",
+    "launch_mode": "browser",
+    "login_email": "",
+    "login_password": "",
+    "qr_token": "DEMO-ER-101-B",
+    "locale": "en-US",
+    "theme": "system",
+    "tags": [
+      "patient",
+      "qr",
+      "emergency"
+    ],
+    "notes": "",
+    "metadata": {
+      "bed_label": "ER-101-B",
+      "scope": ""
+    }
+  },
+  {
+    "id": "patient-er102a",
+    "project_id": "ncs",
+    "name": "Patient ER-102-A",
+    "preset_id": "patient-er102a",
+    "kind": "patient",
+    "role": "patient",
+    "route": "#/patient/scan",
+    "base_route": "#/patient/scan",
+    "landing_route": "#/patient/welcome",
+    "launch_mode": "browser",
+    "login_email": "",
+    "login_password": "",
+    "qr_token": "DEMO-ER-102-A",
+    "locale": "en-US",
+    "theme": "system",
+    "tags": [
+      "patient",
+      "qr",
+      "emergency"
+    ],
+    "notes": "",
+    "metadata": {
+      "bed_label": "ER-102-A",
+      "scope": ""
+    }
+  },
+  {
+    "id": "patient-mw201a",
+    "project_id": "ncs",
+    "name": "Patient MW-201-A",
+    "preset_id": "patient-mw201a",
+    "kind": "patient",
+    "role": "patient",
+    "route": "#/patient/scan",
+    "base_route": "#/patient/scan",
+    "landing_route": "#/patient/welcome",
+    "launch_mode": "browser",
+    "login_email": "",
+    "login_password": "",
+    "qr_token": "DEMO-MW-201-A",
+    "locale": "en-US",
+    "theme": "system",
+    "tags": [
+      "patient",
+      "qr",
+      "medical"
+    ],
+    "notes": "",
+    "metadata": {
+      "bed_label": "MW-201-A",
+      "scope": ""
+    }
+  },
+  {
+    "id": "patient-mw201b",
+    "project_id": "ncs",
+    "name": "Patient MW-201-B",
+    "preset_id": "patient-mw201b",
+    "kind": "patient",
+    "role": "patient",
+    "route": "#/patient/scan",
+    "base_route": "#/patient/scan",
+    "landing_route": "#/patient/welcome",
+    "launch_mode": "browser",
+    "login_email": "",
+    "login_password": "",
+    "qr_token": "DEMO-MW-201-B",
+    "locale": "en-US",
+    "theme": "system",
+    "tags": [
+      "patient",
+      "qr",
+      "medical"
+    ],
+    "notes": "",
+    "metadata": {
+      "bed_label": "MW-201-B",
+      "scope": ""
+    }
+  },
+  {
+    "id": "nurse-er",
+    "project_id": "ncs",
+    "name": "Nurse ER",
+    "preset_id": "nurse-er",
+    "kind": "staff",
+    "role": "nurse",
+    "route": "#/staff/login",
+    "base_route": "#/staff/login",
+    "landing_route": "#/nurse/calls",
+    "launch_mode": "browser",
+    "login_email": "nurse.er@aura-demo.test",
+    "login_password": "Password123!",
+    "qr_token": "",
+    "locale": "en-US",
+    "theme": "system",
+    "tags": [
+      "staff",
+      "nurse",
+      "emergency"
+    ],
+    "notes": "",
+    "metadata": {
+      "bed_label": "",
+      "scope": "Emergency Department"
+    }
+  },
+  {
+    "id": "nurse-medical",
+    "project_id": "ncs",
+    "name": "Nurse Medical",
+    "preset_id": "nurse-medical",
+    "kind": "staff",
+    "role": "nurse",
+    "route": "#/staff/login",
+    "base_route": "#/staff/login",
+    "landing_route": "#/nurse/calls",
+    "launch_mode": "browser",
+    "login_email": "nurse.medical@aura-demo.test",
+    "login_password": "Password123!",
+    "qr_token": "",
+    "locale": "en-US",
+    "theme": "system",
+    "tags": [
+      "staff",
+      "nurse",
+      "medical"
+    ],
+    "notes": "",
+    "metadata": {
+      "bed_label": "",
+      "scope": "Medical Ward"
+    }
+  },
+  {
+    "id": "nurse-float",
+    "project_id": "ncs",
+    "name": "Nurse Float",
+    "preset_id": "nurse-float",
+    "kind": "staff",
+    "role": "nurse",
+    "route": "#/staff/login",
+    "base_route": "#/staff/login",
+    "landing_route": "#/nurse/calls",
+    "launch_mode": "browser",
+    "login_email": "nurse.float@aura-demo.test",
+    "login_password": "Password123!",
+    "qr_token": "",
+    "locale": "en-US",
+    "theme": "system",
+    "tags": [
+      "staff",
+      "nurse",
+      "float"
+    ],
+    "notes": "",
+    "metadata": {
+      "bed_label": "",
+      "scope": "ER-101-A"
+    }
+  },
+  {
+    "id": "supervisor-hospital",
+    "project_id": "ncs",
+    "name": "Hospital Supervisor",
+    "preset_id": "supervisor-hospital",
+    "kind": "staff",
+    "role": "hospital_supervisor",
+    "route": "#/staff/login",
+    "base_route": "#/staff/login",
+    "landing_route": "#/supervisor/calls",
+    "launch_mode": "browser",
+    "login_email": "hospital.supervisor@aura-demo.test",
+    "login_password": "Password123!",
+    "qr_token": "",
+    "locale": "en-US",
+    "theme": "system",
+    "tags": [
+      "staff",
+      "supervisor",
+      "hospital"
+    ],
+    "notes": "",
+    "metadata": {
+      "bed_label": "",
+      "scope": ""
+    }
+  },
+  {
+    "id": "supervisor-department",
+    "project_id": "ncs",
+    "name": "Department Supervisor",
+    "preset_id": "supervisor-department",
+    "kind": "staff",
+    "role": "department_supervisor",
+    "route": "#/staff/login",
+    "base_route": "#/staff/login",
+    "landing_route": "#/supervisor/calls",
+    "launch_mode": "browser",
+    "login_email": "department.supervisor@aura-demo.test",
+    "login_password": "Password123!",
+    "qr_token": "",
+    "locale": "en-US",
+    "theme": "system",
+    "tags": [
+      "staff",
+      "supervisor",
+      "department"
+    ],
+    "notes": "",
+    "metadata": {
+      "bed_label": "",
+      "scope": "Emergency Department"
+    }
+  },
+  {
+    "id": "admin-main",
+    "project_id": "ncs",
+    "name": "Admin",
+    "preset_id": "admin-main",
+    "kind": "staff",
+    "role": "admin",
+    "route": "#/staff/login",
+    "base_route": "#/staff/login",
+    "landing_route": "#/admin/beds",
+    "launch_mode": "browser",
+    "login_email": "admin@aura-demo.test",
+    "login_password": "Password123!",
+    "qr_token": "",
+    "locale": "en-US",
+    "theme": "system",
+    "tags": [
+      "staff",
+      "admin"
+    ],
+    "notes": "",
+    "metadata": {
+      "bed_label": "",
+      "scope": ""
+    }
+  },
+  {
+    "id": "super-admin",
+    "project_id": "ncs",
+    "name": "Super Admin",
+    "preset_id": "super-admin",
+    "kind": "staff",
+    "role": "super_admin",
+    "route": "#/staff/login",
+    "base_route": "#/staff/login",
+    "landing_route": "#/super-admin/hospitals",
+    "launch_mode": "browser",
+    "login_email": "super.admin@ncs-demo.test",
+    "login_password": "Password123!",
+    "qr_token": "",
+    "locale": "en-US",
+    "theme": "system",
+    "tags": [
+      "staff",
+      "platform",
+      "super-admin"
+    ],
+    "notes": "",
+    "metadata": {
+      "bed_label": "",
+      "scope": ""
+    }
+  }
+]

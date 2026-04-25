@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "actorharbor"
+version = "0.11.0"
+description = "ActorHarbor - AI-connectable simulation lab for browser workflows and acceptance testing."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [
+  { name = "AliBakrOfficial" }
+]
+keywords = [
+  "automation",
+  "playwright",
+  "simulation",
+  "testing",
+  "acceptance",
+  "saas",
+  "tkinter",
+  "browser",
+  "adapter",
+  "agents"
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Environment :: Win32 (MS Windows)",
+  "Topic :: Software Development :: Testing",
+  "Intended Audience :: Developers"
+]
+dependencies = []
+
+[project.optional-dependencies]
+playwright = ["playwright>=1.53,<2"]
+
+[project.scripts]
+actorharbor = "lab.app:main"
+actorharbor-run = "run_scenario:main"
+local-saas-lab = "lab.app:main"
+local-saas-lab-run = "run_scenario:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["lab*"]

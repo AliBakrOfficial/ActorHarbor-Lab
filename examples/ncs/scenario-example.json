@@ -1,0 +1,45 @@
+{
+  "id": "admin-operations",
+  "name": "Admin Scenario",
+  "project_id": "ncs",
+  "participants": [
+    {
+      "id": "admin",
+      "name": "Admin",
+      "preset_id": "admin-main",
+      "route": "#/staff/login",
+      "launch_mode": "browser"
+    }
+  ],
+  "steps": [
+    {
+      "id": "admin-login",
+      "title": "Log in as admin",
+      "actor_id": "admin",
+      "mode": "automated",
+      "action": "staff_login",
+      "route": "#/staff/login",
+      "post_login_route": "#/admin/beds",
+      "assertion": {
+        "type": "url_contains",
+        "value": "/#/admin/beds"
+      },
+      "screenshot": true,
+      "settle_ms": 500
+    },
+    {
+      "id": "admin-beds",
+      "title": "Open beds management",
+      "actor_id": "admin",
+      "mode": "automated",
+      "action": "navigate",
+      "route": "#/admin/beds",
+      "wait_for_text": "ER-101-A",
+      "assertion": {
+        "type": "body_contains",
+        "value": "ER-101-A"
+      },
+      "screenshot": true,
+      "settle_ms": 500
+    }
+  ]
