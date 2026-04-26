@@ -2,94 +2,31 @@
 
 **ActorHarbor — AI-connectable simulation lab for browser workflows and acceptance testing**
 
-ActorHarbor is a standalone multi-actor browser simulation and acceptance harness. It helps engineering teams run realistic browser workflows, preserve evidence, and mix automated execution with honest manual-review checkpoints through an adapter-driven model.
+ActorHarbor is a desktop operator console for running realistic browser workflows with multiple actors, isolated browser state, evidence capture, and honest hybrid automation. It is designed for acceptance-style testing where screenshots, logs, summaries, and manual-review checkpoints matter as much as the final status.
 
 Maintained by `AliBakrOfficial`.
 
-It is built for situations where a plain test runner is not enough:
+## What problem ActorHarbor solves
 
-- multiple actors need separate browser state
-- login and protected-route behavior matter
-- evidence and screenshots matter as much as pass/fail
-- some steps are stable enough to automate while others still require human review
+Many browser workflows are not a single clean happy path. They often involve:
+
+- multiple roles with separate sessions
+- protected routes and redirects
+- partial automation plus human checkpoints
+- evidence that needs to be reviewed after the run
+
+ActorHarbor makes those flows runnable, inspectable, and documentable without pretending every step should be a brittle fully automated test.
 
 ## Key capabilities
 
-- isolated Chrome user-data-dir profiles
-- multi-actor scenario runner
-- manual, assisted, and automated modes
-- Playwright-backed automation
-- truthful keep-open / live inspection semantics
-- auth-aware branching and protected-surface detection
-- evidence bundles with screenshots, summaries, logs, and indexes
+- multi-actor scenario execution with isolated Chrome profiles
+- desktop UI for launching, observing, and reviewing runs
+- automated, assisted, and manual modes
+- Playwright-backed browser automation
+- truthful keep-open behavior and live inspection labeling
+- run artifacts with summaries, logs, screenshots, and evidence indexes
 - adapter-driven project support
-
-## Why ActorHarbor exists
-
-Many real SaaS workflows are not single-page happy-path demos. They involve:
-
-- role switching
-- separate browser state
-- protected routes
-- redirect behavior
-- acceptance flows that still need operator judgment at the end
-
-ActorHarbor exists to make those workflows runnable, inspectable, and documentable without pretending every flow should be a brittle fully automated E2E script.
-
-## Why ActorHarbor is different
-
-- **Multi-actor by design**
-  - separate patient, nurse, admin, supervisor, or platform windows can participate in one scenario
-- **Real browser workflows**
-  - isolated profiles and persistent contexts reflect real session behavior
-- **Truthful hybrid automation**
-  - automated where stable, manual-review where honesty matters
-- **Evidence-driven output**
-  - summaries, step logs, screenshots, actor final-state captures, and evidence indexes
-- **Adapter architecture**
-  - the core stays reusable while project knowledge lives in adapters
-- **AI-connectable adapter path**
-  - routes, login strategy, selectors, settle hints, scenarios, and manual-review boundaries can be authored systematically by humans or AI agents
-
-## Architecture snapshot
-
-```text
-ActorHarbor-Lab/
-|-- README.md
-|-- LICENSE
-|-- pyproject.toml
-|-- run_lab.py
-|-- run_scenario.py
-|-- data/
-|-- docs/
-|-- examples/
-|-- lab/
-|   |-- app.py
-|   |-- scenario_runner.py
-|   |-- run_history.py
-|   |-- automation/
-|   `-- projects/
-|-- runtime/
-`-- tests/
-```
-
-Core responsibilities:
-
-- browser/session orchestration
-- scenario execution
-- artifact generation
-- operator UI
-- truthful outcome aggregation
-
-Adapter responsibilities:
-
-- routes
-- role presets
-- login strategy
-- protected-surface detection
-- selectors
-- settle/evidence hints
-- scenario definitions
+- AI-friendly adapter authoring path for new projects
 
 ## Quick start
 
@@ -105,131 +42,144 @@ python -m venv .venv
 ### Launch the UI
 
 ```powershell
+cd tools\ActorHarbor-Lab
+.\run-local-saas-lab.bat
+```
+
+This launcher path is the default Windows entry point and remains supported.
+
+You can also launch directly with:
+
+```powershell
 python run_lab.py
-```
-
-Or:
-
-```powershell
-python -m lab
-```
-
-Or after installation:
-
-```powershell
-actorharbor
 ```
 
 ### Run one scenario from CLI
 
 ```powershell
+cd tools\ActorHarbor-Lab
 .\.venv\Scripts\python.exe .\run_scenario.py admin-operations --mode automated --launch-mode browser
 ```
 
-## Adapter model
+## UI overview
 
-ActorHarbor is intentionally adapter-driven.
+ActorHarbor is organized as a multi-tab desktop tool:
 
-An adapter can define:
+- `Profiles`
+  - create, inspect, clone, reset, and launch actor profiles
+- `Scenarios`
+  - browse scenario definitions and send one to the runner
+- `Scenario Runner`
+  - choose mode, start a run, watch live progress, and review final status
+- `Active Sessions`
+  - inspect live or preserved sessions and understand actor/window state
+- `Artifacts / Run History`
+  - review previous runs, open artifacts, and manage history safely
+- `Project Adapter`
+  - inspect the active adapter, selectors, routes, and project-specific mapping
+- `Settings`
+  - configure base URL, Chrome path, defaults, and runner behavior
+
+For a fuller walkthrough, see [User Guide](./docs/USER_GUIDE.md).
+
+## Screenshots
+
+### Profiles and Scenarios
+
+![ActorHarbor Profiles tab](./docs/images/profiles-overview.png)
+
+![ActorHarbor Scenarios tab](./docs/images/scenarios-overview.png)
+
+### Scenario Runner
+
+![ActorHarbor Scenario Runner](./docs/images/scenario-runner.png)
+
+### Active Sessions and Artifacts
+
+![ActorHarbor Active Sessions view](./docs/images/active-sessions.png)
+
+![ActorHarbor Artifacts and Run History](./docs/images/artifacts-history.png)
+
+### Project Adapter and Settings
+
+![ActorHarbor Project Adapter view](./docs/images/project-adapter.png)
+
+![ActorHarbor Settings view](./docs/images/settings.png)
+
+See [Screenshot Guide](./docs/SCREENSHOTS.md) for the current screenshot set and future refresh guidance.
+
+## How it works
+
+At a high level, ActorHarbor combines:
+
+- a reusable core execution engine
+- a project adapter that describes routes, selectors, auth rules, and scenarios
+- an operator-facing desktop UI
+- artifact generation for screenshots, summaries, and logs
+
+The tool stays honest about what was automated, what was skipped because it was already satisfied, and what still needs manual review.
+
+## AI-connectable and adapter-driven
+
+ActorHarbor is adapter-driven by design. An adapter can define:
 
 - routes and route intent
-- actor presets / roles
-- login strategy
-- auth detection rules
-- selectors
-- scenario definitions
-- settle hints
-- evidence hints
+- actor roles and presets
+- login strategy and protected-surface detection
+- selectors and stable end-state signals
+- settle hints and evidence hints
 - manual-review boundaries
 
-The shipped repository includes one concrete example adapter:
+That makes the tool a practical target for AI-assisted adapter authoring: an AI agent can inspect a project, propose selectors and route mappings, and generate adapter definitions without changing the generic core.
 
-- `ncs`
+Start here:
 
-That adapter is useful as a worked example, but the core project identity is tool-first, not NCS-first.
-
-## AI-agent adapter authoring angle
-
-ActorHarbor is designed to be **AI-connectable** in a concrete way:
-
-- an AI agent can inspect a project
-- identify routes and login/auth flow
-- propose selectors and stable end-state signals
-- map scenarios into adapter definitions
-- keep unstable checkpoints marked as manual-review instead of faking full automation
-
-This is documented explicitly in:
-
+- [Adapter Contract](./docs/ADAPTER_CONTRACT.md)
 - [AI-Agent Adapter Generation Guide](./docs/AI_ADAPTER_AUTHORING.md)
+- [NCS Example Adapter](./examples/ncs/README.md)
 
-## Outputs and evidence
+## Main docs
 
-Each run can produce:
-
-- `summary.json`
-- `summary.md`
-- `step-log.json`
-- `evidence-index.json`
-- screenshots
-
-Final statuses are honest:
-
-- `passed`
-- `passed-with-recovery`
-- `manual-review`
-- `failed`
-
-## Screenshots / hero visuals
-
-Recommended GitHub README visuals for launch:
-
-- operator console screenshot
-- one multi-actor scenario run summary
-- one artifact bundle screenshot showing `summary.md` plus screenshots
-
-The current repo keeps visuals out of source until curated public assets are chosen.
-
-## Trust model and limitations
-
-ActorHarbor does not claim to be universal magic.
-
-- stable flows can be automated
-- weak flows should remain manual-review
-- adapters are the project-specific mapping layer
-- evidence matters as much as final status
-- protected-route/auth behavior must be labeled truthfully
-
-See:
-
-- [Artifacts And Evidence](./docs/ARTIFACTS_AND_EVIDENCE.md)
-- [Trust Model And Troubleshooting](./docs/TRUST_MODEL_AND_TROUBLESHOOTING.md)
-
-## Docs map
-
+- [Getting Started](./docs/GETTING_STARTED.md)
+- [User Guide](./docs/USER_GUIDE.md)
+- [Usage Guide](./docs/USAGE.md)
 - [Architecture Overview](./docs/ARCHITECTURE.md)
 - [Adapter Model](./docs/ADAPTER_MODEL.md)
 - [Adapter Contract](./docs/ADAPTER_CONTRACT.md)
 - [AI-Agent Adapter Generation Guide](./docs/AI_ADAPTER_AUTHORING.md)
-- [Usage Guide](./docs/USAGE.md)
 - [Artifacts And Evidence](./docs/ARTIFACTS_AND_EVIDENCE.md)
 - [Trust Model And Troubleshooting](./docs/TRUST_MODEL_AND_TROUBLESHOOTING.md)
 - [Development Guide](./docs/DEVELOPMENT.md)
-- [NCS Example Adapter](./examples/ncs/README.md)
-- [Public Launch Notes](./docs/GITHUB_RELEASE_PREP.md)
 
-## Contributing / development
+## Current limitations
 
-Primary public maintainer: `AliBakrOfficial`.
+ActorHarbor is technically strong, but it is not magic:
+
+- adapters are still the project-specific layer
+- not every workflow should be fully automated
+- some scenarios are intentionally hybrid and end in `manual-review`
+- screenshot quality depends on the configured environment and the adapter's settle hints
+- local environment setup still matters for Chrome, Playwright, and reachable app URLs
+
+## Public project identity
+
+- public project name: `ActorHarbor`
+- public repository maintainer: `AliBakrOfficial`
+- current repository shape: standalone tool repo, not tied to changing product runtime code
+
+## Development and validation
 
 Run tests:
 
 ```powershell
+cd tools\ActorHarbor-Lab
 python -m unittest discover -s tests
 ```
 
-Compile-check core modules:
+Compile-check key modules:
 
 ```powershell
+cd tools\ActorHarbor-Lab
 python -m py_compile .\run_lab.py .\run_scenario.py .\lab\app.py .\lab\scenario_runner.py .\lab\run_history.py .\lab\automation\engine.py
 ```
 

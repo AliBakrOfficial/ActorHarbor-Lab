@@ -28,6 +28,17 @@ ActorHarbor is an AI-connectable simulation lab for browser workflows and accept
 
 - `ActorHarbor v0.1.0 — public launch`
 
+## Screenshot set
+
+Recommended first public screenshots:
+
+- `docs/images/profiles-overview.png`
+- `docs/images/scenario-runner.png`
+- `docs/images/active-sessions.png`
+- `docs/images/artifacts-history.png`
+- `docs/images/project-adapter.png`
+- `docs/images/settings.png`
+
 ## Suggested v0.1.0 release notes outline
 
 ### Highlights

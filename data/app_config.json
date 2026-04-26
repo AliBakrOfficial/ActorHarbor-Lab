@@ -1,6 +1,6 @@
 {
   "base_url": "http://127.0.0.1:9200",
-  "chrome_path": "",
+  "chrome_path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
   "default_launch_mode": "browser",
   "default_window_size": "1400,940",
   "default_new_window": true,
@@ -47,9 +47,9 @@
     ]
   },
   "current_project": "ncs",
-  "artifacts_open_after_run": false,
+  "artifacts_open_after_run": true,
   "headless_automation": false,
   "automation_timeout_ms": 15000,
-  "keep_windows_open_after_run": false,
+  "keep_windows_open_after_run": true,
   "screenshot_settle_ms": 250
 }

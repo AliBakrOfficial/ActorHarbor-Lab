@@ -1,1 +1,1 @@
-"""Local SaaS Simulation Lab."""
+"""ActorHarbor application package."""

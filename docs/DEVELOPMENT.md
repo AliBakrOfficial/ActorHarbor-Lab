@@ -61,3 +61,4 @@ Verify:
 - `.gitignore` protects runtime noise
 - tests pass
 - at least one real scenario still runs in a configured local environment
+- screenshot placeholders and `docs/images/` remain public-ready

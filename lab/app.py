@@ -28,14 +28,14 @@ from .scenario_runner import ScenarioRunner, build_scenario_plan
 class LocalSaasLabApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
-        self.title("Local SaaS Simulation Lab")
+        self.title("ActorHarbor — AI-connectable Simulation Lab")
         self.geometry("1460x920")
         self.minsize(1260, 780)
 
         self.store = LabConfigStore()
         self._load_state()
 
-        self.status_var = tk.StringVar(value="Ready.")
+        self.status_var = tk.StringVar(value="ActorHarbor ready.")
         self.custom_route_var = tk.StringVar(value="#/staff/login")
         self.base_url_var = tk.StringVar(value=self.app_config.get("base_url", "http://127.0.0.1:9200"))
         self.chrome_path_var = tk.StringVar(value=self.app_config.get("chrome_path", ""))
@@ -128,7 +128,7 @@ class LocalSaasLabApp(tk.Tk):
         left.rowconfigure(1, weight=1)
         right.rowconfigure(2, weight=1)
 
-        ttk.Label(left, text="Lab Profiles").grid(row=0, column=0, sticky="w")
+        ttk.Label(left, text="Actor Profiles").grid(row=0, column=0, sticky="w")
         columns = ("name", "kind", "role", "route", "mode")
         self.profiles_tree = ttk.Treeview(left, columns=columns, show="headings", height=20)
         for column, heading, width in [

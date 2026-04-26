@@ -24,6 +24,12 @@ python -m venv .venv
 
 ```powershell
 cd tools\ActorHarbor-Lab
+.\run-local-saas-lab.bat
+```
+
+Or:
+
+```powershell
 python run_lab.py
 ```
 
@@ -56,6 +62,8 @@ cd tools\ActorHarbor-Lab
 6. Pick presentation mode
 7. Decide whether to keep windows open
 8. Run and inspect artifacts
+
+For a tab-by-tab walkthrough, see [User Guide](./USER_GUIDE.md).
 
 ## Add or adapt a project
 
