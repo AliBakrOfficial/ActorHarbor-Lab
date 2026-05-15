@@ -38,7 +38,11 @@ def finalize_run_record(run_record: dict) -> dict:
     run_record["ended_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     recovery_overview = _build_recovery_overview(run_record)
     run_record["recovery_overview"] = recovery_overview
-    if recovery_overview["unrecovered_failure_count"] > 0:
+    validation_invalid_reasons = _collect_validation_invalid_reasons(run_record)
+    run_record["validation_invalid_reasons"] = validation_invalid_reasons
+    if validation_invalid_reasons:
+        run_record["status"] = "validation-invalid"
+    elif recovery_overview["unrecovered_failure_count"] > 0:
         run_record["status"] = "failed"
     elif any(step["status"] == "manual" for step in run_record["steps"]):
         run_record["status"] = "manual-review"
@@ -62,6 +66,12 @@ def finalize_run_record(run_record: dict) -> dict:
         run_record["summary"] = (
             f"{run_record['scenario_name']} finished with failed after "
             f"{recovery_overview['unrecovered_failure_count']} unrecovered issue(s)."
+        )
+    elif run_record["status"] == "validation-invalid":
+        reason_text = ", ".join(validation_invalid_reasons) if validation_invalid_reasons else "unknown validation blocker"
+        run_record["summary"] = (
+            f"{run_record['scenario_name']} finished with validation-invalid because auth/session contamination "
+            f"prevented a clean authenticated runtime surface ({reason_text})."
         )
     else:
         run_record["summary"] = f"{run_record['scenario_name']} finished with {run_record['status']}."
@@ -145,6 +155,16 @@ def write_run_artifacts(run_record: dict, artifact_dir: Path) -> None:
         markdown_lines.append("- None")
     markdown_lines.extend([
         "",
+        "## Validation Invalid Reasons",
+    ])
+    validation_invalid_reasons = run_record.get("validation_invalid_reasons", [])
+    if validation_invalid_reasons:
+        for reason in validation_invalid_reasons:
+            markdown_lines.append(f"- `{reason}`")
+    else:
+        markdown_lines.append("- None")
+    markdown_lines.extend([
+        "",
         "## Failure Notes",
     ])
     failure_steps = [step for step in run_record.get("steps", []) if step.get("status") in {"failed", "blocked"}]
@@ -175,11 +195,13 @@ def write_run_artifacts(run_record: dict, artifact_dir: Path) -> None:
                 markdown_lines.append(f"  recovery note: `{step['recovery_note']}`")
         if step.get("screenshot"):
             markdown_lines.append(f"  screenshot: `{step['screenshot']}`")
+        if step.get("artifact"):
+            markdown_lines.append(f"  artifact: `{step['artifact']}`")
     markdown_file.write_text("\n".join(markdown_lines), encoding="utf-8")
 
 
 def _build_step_counts(run_record: dict) -> dict:
-    counts = {"passed": 0, "failed": 0, "manual": 0, "blocked": 0}
+    counts = {"passed": 0, "failed": 0, "manual": 0, "blocked": 0, "validation-invalid": 0}
     for step in run_record.get("steps", []):
         status = step.get("status")
         if status in counts:
@@ -225,6 +247,8 @@ def _build_step_log(run_record: dict) -> list[dict]:
                 "message": step.get("message", ""),
                 "current_url": step.get("current_url", ""),
                 "screenshot": step.get("screenshot", ""),
+                "artifact": step.get("artifact", ""),
+                "observations": step.get("observations", {}),
                 "evidence_type": step.get("evidence_type", ""),
                 "best_evidence": bool(step.get("best_evidence")),
             }
@@ -237,6 +261,7 @@ def _build_evidence_index(run_record: dict) -> dict:
         "scenario_name": run_record.get("scenario_name", ""),
         "status": run_record.get("status", ""),
         "artifact_dir": run_record.get("artifact_dir", ""),
+        "validation_invalid_reasons": run_record.get("validation_invalid_reasons", []),
         "recovery_overview": run_record.get("recovery_overview", {}),
         "best_evidence": run_record.get("best_evidence", []),
         "actor_sessions": [
@@ -317,6 +342,42 @@ def _build_recovery_overview(run_record: dict) -> dict:
         "recovered_step_ids": [step.get("id", "") for step in recovered_failures],
         "unrecovered_step_ids": [step.get("id", "") for step in unrecovered_failures],
     }
+
+
+def _collect_validation_invalid_reasons(run_record: dict) -> list[str]:
+    has_failure = False
+    reasons: list[str] = []
+    for step in run_record.get("steps", []):
+        if step.get("status") not in {"failed", "blocked"}:
+            continue
+        has_failure = True
+        observations = step.get("observations", {})
+        auth_surface = observations.get("auth_surface", "")
+        current_url = step.get("current_url", "")
+        reason = f"{step.get('reason', '')}\n{step.get('message', '')}".lower()
+        if auth_surface == "staff-login" or "/#/staff/login" in current_url or "authentication did not stabilize" in reason:
+            reasons.append("staff-auth-not-stabilized")
+        if auth_surface in {"patient-session-expired", "patient-scan"} or "/#/patient/session-expired" in current_url:
+            reasons.append("patient-session-collapsed")
+        if "visibility_state was 'visible', expected 'hidden'" in reason:
+            reasons.append("hidden-tab-evidence-unreliable")
+        if "expected baseline" in reason or "baseline snapshot not found" in reason:
+            reasons.append("stale-queue-contamination")
+        if "waiting for locator" in reason and step.get("action") == "click" and observations.get("auth_surface") in {"staff-login", "patient-session-expired"}:
+            reasons.append("selector-evidence-not-trustworthy")
+
+    if has_failure:
+        for actor in run_record.get("actor_sessions", []):
+            final_url = actor.get("final_url", "")
+            if "/#/staff/login" in final_url:
+                reasons.append("staff-auth-not-stabilized")
+            if "/#/patient/session-expired" in final_url:
+                reasons.append("patient-session-collapsed")
+    deduped: list[str] = []
+    for reason in reasons:
+        if reason not in deduped:
+            deduped.append(reason)
+    return deduped
 
 
 def _find_recovery_step(failed_step: dict, steps: list[dict]) -> dict | None:

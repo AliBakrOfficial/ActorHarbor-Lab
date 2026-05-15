@@ -10,7 +10,8 @@ from lab.automation.engine import ActorSessionStartupError, AutomationEngine
 from lab.config_store import LabConfigStore
 from lab.defaults import DEFAULT_APP_CONFIG
 from lab.run_history import delete_run_artifact_dir, finalize_run_record, prune_run_history, write_run_artifacts
-from lab.scenario_runner import ScenarioRunner
+from run_notification_audit import ensure_environment_ready
+from lab.scenario_runner import ScenarioRunner, build_scenario_plan
 
 
 class _FakeLocator:
@@ -47,7 +48,21 @@ class _FakePage:
         self.fills = {}
         self.route_behaviors = {}
         self.submit_redirect = ""
+        self.post_submit_route_behaviors = {}
         self.last_wait_timeout = 0
+        self.event_handlers = {}
+        self.visibility_state = "visible"
+        self.hidden = False
+        self.notification_texts = []
+        self.lifecycle_banner_texts = []
+        self.highlighted_call_ids = []
+        self.call_card_ids = []
+        self.call_card_texts = []
+        self.calls_badges = []
+        self.local_storage_keys = []
+        self.session_storage_keys = []
+        self.context = None
+        self.timeout_hooks = []
 
     def wait_for_load_state(self, *_args, **_kwargs):
         return None
@@ -57,17 +72,36 @@ class _FakePage:
 
     def wait_for_timeout(self, ms):
         self.last_wait_timeout = ms
+        if self.timeout_hooks:
+            hook = self.timeout_hooks.pop(0)
+            hook()
         return None
 
     def screenshot(self, *, path, **_kwargs):
         Path(path).write_text("fake image", encoding="utf-8")
         self.saved_paths.append(path)
 
+    def on(self, event_name, handler):
+        self.event_handlers.setdefault(event_name, []).append(handler)
+
+    def bring_to_front(self):
+        self.visibility_state = "visible"
+        self.hidden = False
+        if self.context:
+            for page in self.context.pages:
+                if page is self:
+                    continue
+                page.visibility_state = "hidden"
+                page.hidden = True
+
     def goto(self, url, **_kwargs):
         behavior = self.route_behaviors.get(url, {})
         self.url = behavior.get("url", url)
         self.visible_selectors = set(behavior.get("visible_selectors", set()))
         self.body_text = behavior.get("body_text", self.body_text)
+        return None
+
+    def reload(self, **_kwargs):
         return None
 
     def wait_for_function(self, _script, arg=None, timeout=None):
@@ -77,21 +111,57 @@ class _FakePage:
             return None
         raise RuntimeError(f"Condition not satisfied for {arg}")
 
+    def evaluate(self, script):
+        if "localStorage?.clear" in script:
+            self.local_storage_keys = []
+            self.session_storage_keys = []
+            return None
+        return {
+            "url": self.url,
+            "staffShellVisible": ".staff-shell-layout" in self.visible_selectors,
+            "staffLoginFormVisible": 'input[type="email"]' in self.visible_selectors and 'input[type="password"]' in self.visible_selectors,
+            "visibilityState": self.visibility_state,
+            "hidden": self.hidden,
+            "notifications": list(self.notification_texts),
+            "lifecycleBanners": list(self.lifecycle_banner_texts),
+            "highlightedCallIds": list(self.highlighted_call_ids),
+            "callCardIds": list(self.call_card_ids),
+            "callCardTexts": list(self.call_card_texts),
+            "callsBadges": list(self.calls_badges),
+            "localStorageKeys": list(self.local_storage_keys),
+            "sessionStorageKeys": list(self.session_storage_keys),
+            "staffUserHintPresent": "ncs.staff.user" in self.local_storage_keys,
+            "staffAuthModeHintPresent": "ncs.staff.auth_mode" in self.local_storage_keys,
+            "patientSessionHintPresent": "ncs.patient.session" in self.local_storage_keys,
+        }
+
     def handle_click(self, selector):
         if selector == 'button[type="submit"]' and self.submit_redirect:
             self.url = self.submit_redirect
             self.visible_selectors = set()
             self.body_text = "Protected page"
+            for route, behavior in self.post_submit_route_behaviors.items():
+                self.route_behaviors[route] = dict(behavior)
 
 
 class _FakeContext:
     def __init__(self) -> None:
-        self.pages = [_FakePage()]
+        first = _FakePage()
+        first.context = self
+        self.pages = [first]
+        self.cookie_items = []
 
     def new_page(self):
         page = _FakePage()
+        page.context = self
         self.pages.append(page)
         return page
+
+    def cookies(self):
+        return list(self.cookie_items)
+
+    def clear_cookies(self):
+        self.cookie_items = []
 
 
 class LabHardeningTests(unittest.TestCase):
@@ -105,6 +175,26 @@ class LabHardeningTests(unittest.TestCase):
     def test_default_app_config_includes_operator_hardening_options(self):
         self.assertIn("keep_windows_open_after_run", DEFAULT_APP_CONFIG)
         self.assertIn("artifacts_open_after_run", DEFAULT_APP_CONFIG)
+
+    def test_build_scenario_plan_preserves_remember_as_metadata(self):
+        scenario = {
+            "participants": [{"id": "nurse", "preset_id": "nurse-er"}],
+            "steps": [
+                {
+                    "id": "baseline",
+                    "title": "Capture baseline",
+                    "actor_id": "nurse",
+                    "mode": "automated",
+                    "action": "assert_state",
+                    "remember_as": "outside_calls_baseline",
+                }
+            ],
+        }
+        profiles = [{"id": "nurse-er", "name": "Nurse ER", "preset_id": "nurse-er", "route": "#/staff/login", "launch_mode": "browser"}]
+
+        plan = build_scenario_plan(scenario, profiles, "automated")
+
+        self.assertEqual("outside_calls_baseline", plan[0]["remember_as"])
 
     def test_operator_run_options_persist_in_app_config(self):
         store = LabConfigStore()
@@ -174,7 +264,15 @@ class LabHardeningTests(unittest.TestCase):
     def test_staff_login_skips_when_actor_is_already_authenticated(self):
         engine = AutomationEngine()
         page = _FakePage()
+        context = _FakeContext()
+        context.cookie_items = [
+            {"name": "XSRF-TOKEN"},
+            {"name": "ncs_session"},
+        ]
+        page.context = context
         page.url = "http://127.0.0.1:9200/#/admin/beds"
+        page.local_storage_keys = ["ncs.staff.user", "ncs.staff.auth_mode"]
+        page.visible_selectors = {".staff-shell-layout"}
         result = engine.execute_step(
             actor={"name": "Admin", "landing_route": "#/admin/beds", "login_email": "admin@test", "login_password": "x"},
             step={
@@ -196,14 +294,32 @@ class LabHardeningTests(unittest.TestCase):
     def test_staff_login_executes_when_login_form_is_present(self):
         engine = AutomationEngine()
         page = _FakePage()
+        context = _FakeContext()
+        context.cookie_items = [
+            {"name": "XSRF-TOKEN"},
+            {"name": "ncs_session"},
+        ]
+        page.context = context
         protected_url = "http://127.0.0.1:9200/#/admin/beds"
-        login_url = "http://127.0.0.1:9200/#/staff/login?redirect=/admin/beds"
+        redirect_login_url = "http://127.0.0.1:9200/#/staff/login?redirect=/admin/beds"
+        plain_login_url = "http://127.0.0.1:9200/#/staff/login"
         page.route_behaviors[protected_url] = {
-            "url": login_url,
+            "url": redirect_login_url,
+            "visible_selectors": {'input[type="email"]', 'input[type="password"]', 'button[type="submit"]'},
+            "body_text": "Login",
+        }
+        page.route_behaviors[plain_login_url] = {
+            "url": plain_login_url,
             "visible_selectors": {'input[type="email"]', 'input[type="password"]', 'button[type="submit"]'},
             "body_text": "Login",
         }
         page.submit_redirect = protected_url
+        page.timeout_hooks.append(
+            lambda: (
+                page.visible_selectors.add(".staff-shell-layout"),
+                page.local_storage_keys.extend(["ncs.staff.user", "ncs.staff.auth_mode"])
+            )
+        )
         result = engine.execute_step(
             actor={"name": "Admin", "landing_route": "#/admin/beds", "login_email": "admin@test", "login_password": "secret"},
             step={
@@ -223,6 +339,300 @@ class LabHardeningTests(unittest.TestCase):
         self.assertEqual("executed", result["resolution"])
         self.assertEqual(protected_url, page.url)
 
+    def test_staff_login_reprobes_protected_surface_after_intermediate_post_submit_route(self):
+        engine = AutomationEngine()
+        page = _FakePage()
+        context = _FakeContext()
+        context.cookie_items = [
+            {"name": "XSRF-TOKEN"},
+            {"name": "ncs_session"},
+        ]
+        page.context = context
+        protected_url = "http://127.0.0.1:9200/#/nurse/calls"
+        redirect_login_url = "http://127.0.0.1:9200/#/staff/login?redirect=/nurse/calls"
+        plain_login_url = "http://127.0.0.1:9200/#/staff/login"
+        page.route_behaviors[protected_url] = {
+            "url": redirect_login_url,
+            "visible_selectors": {'input[type="email"]', 'input[type="password"]', 'button[type="submit"]'},
+            "body_text": "Login",
+        }
+        page.route_behaviors[plain_login_url] = {
+            "url": plain_login_url,
+            "visible_selectors": {'input[type="email"]', 'input[type="password"]', 'button[type="submit"]'},
+            "body_text": "Login",
+        }
+        page.submit_redirect = "http://127.0.0.1:9200/#/splash"
+        page.post_submit_route_behaviors[protected_url] = {
+            "url": protected_url,
+            "visible_selectors": {".staff-shell-layout"},
+            "body_text": "Calls surface",
+        }
+        page.timeout_hooks.append(
+            lambda: page.local_storage_keys.extend(["ncs.staff.user", "ncs.staff.auth_mode"])
+        )
+        result = engine.execute_step(
+            actor={"name": "Nurse", "landing_route": "#/nurse/calls", "login_email": "nurse@test", "login_password": "secret"},
+            step={
+                "id": "nurse-login",
+                "action": "staff_login",
+                "route": "#/staff/login",
+                "post_login_route": "#/nurse/calls",
+                "assertion": {"type": "url_contains", "value": "/#/nurse/calls"},
+            },
+            page=page,
+            base_url="http://127.0.0.1:9200",
+            selectors={"staff_login": {"email": 'input[type="email"]', "password": 'input[type="password"]', "submit": 'button[type="submit"]'}},
+            artifact_dir=Path.cwd(),
+            timeout_ms=1000,
+        )
+        self.assertEqual("passed", result["status"])
+        self.assertEqual(protected_url, page.url)
+
+    def test_staff_login_waits_for_browser_session_hints_before_declaring_success(self):
+        engine = AutomationEngine()
+        page = _FakePage()
+        context = _FakeContext()
+        context.cookie_items = [
+            {"name": "XSRF-TOKEN"},
+            {"name": "ncs_session"},
+        ]
+        page.context = context
+        protected_url = "http://127.0.0.1:9200/#/nurse/calls"
+        redirect_login_url = "http://127.0.0.1:9200/#/staff/login?redirect=/nurse/calls"
+        plain_login_url = "http://127.0.0.1:9200/#/staff/login"
+        page.route_behaviors[protected_url] = {
+            "url": redirect_login_url,
+            "visible_selectors": {'input[type="email"]', 'input[type="password"]', 'button[type="submit"]'},
+            "body_text": "Login",
+        }
+        page.route_behaviors[plain_login_url] = {
+            "url": plain_login_url,
+            "visible_selectors": {'input[type="email"]', 'input[type="password"]', 'button[type="submit"]'},
+            "body_text": "Login",
+        }
+        page.submit_redirect = protected_url
+        page.post_submit_route_behaviors[protected_url] = {
+            "url": protected_url,
+            "visible_selectors": {".staff-shell-layout"},
+            "body_text": "Calls surface",
+        }
+        page.timeout_hooks.append(
+            lambda: page.local_storage_keys.extend(["ncs.staff.user", "ncs.staff.auth_mode"])
+        )
+
+        result = engine.execute_step(
+            actor={"name": "Nurse", "landing_route": "#/nurse/calls", "login_email": "nurse@test", "login_password": "secret"},
+            step={
+                "id": "nurse-login",
+                "action": "staff_login",
+                "route": "#/staff/login",
+                "post_login_route": "#/nurse/calls",
+                "assertion": {"type": "url_contains", "value": "/#/nurse/calls"},
+            },
+            page=page,
+            runtime_session={"network_events": []},
+            base_url="http://127.0.0.1:9200",
+            selectors={"staff_login": {"email": 'input[type="email"]', "password": 'input[type="password"]', "submit": 'button[type="submit"]'}},
+            artifact_dir=Path.cwd(),
+            timeout_ms=1000,
+        )
+
+        self.assertEqual("passed", result["status"])
+        self.assertIn("ncs.staff.user", page.local_storage_keys)
+
+    def test_finalize_run_record_marks_auth_contamination_as_validation_invalid(self):
+        run_record = {
+            "scenario_name": "Auth contamination demo",
+            "steps": [
+                {
+                    "status": "failed",
+                    "reason": "Staff authentication did not stabilize on the protected surface for Nurse ER.",
+                    "message": "",
+                    "current_url": "http://127.0.0.1:9200/#/staff/login?redirect=/nurse/calls",
+                    "observations": {"auth_surface": "staff-login"},
+                    "index": 1,
+                    "actor": "Nurse ER",
+                    "id": "nurse-login",
+                }
+            ],
+            "actor_sessions": [
+                {
+                    "actor_name": "Nurse ER",
+                    "final_url": "http://127.0.0.1:9200/#/staff/login?redirect=/nurse/calls",
+                }
+            ],
+        }
+
+        finalized = finalize_run_record(run_record)
+
+        self.assertEqual("validation-invalid", finalized["status"])
+        self.assertIn("auth/session contamination", finalized["summary"])
+        self.assertIn("staff-auth-not-stabilized", finalized["validation_invalid_reasons"])
+
+    def test_patient_qr_login_reprobes_authenticated_surface_after_delayed_transition(self):
+        engine = AutomationEngine()
+        page = _FakePage()
+        context = _FakeContext()
+        context.cookie_items = [
+            {"name": "XSRF-TOKEN"},
+            {"name": "ncs_session"},
+        ]
+        page.context = context
+        scan_url = "http://127.0.0.1:9200/#/patient/scan"
+        welcome_url = "http://127.0.0.1:9200/#/patient/welcome"
+        services_url = "http://127.0.0.1:9200/#/patient/services"
+        page.route_behaviors[scan_url] = {
+            "url": scan_url,
+            "visible_selectors": {'input[type="text"]', 'button[type="submit"]'},
+            "body_text": "Scan",
+        }
+        page.submit_redirect = scan_url
+        page.post_submit_route_behaviors[welcome_url] = {
+            "url": welcome_url,
+            "body_text": "Welcome",
+        }
+        page.post_submit_route_behaviors[services_url] = {
+            "url": services_url,
+            "body_text": "Services",
+        }
+        page.timeout_hooks.append(
+            lambda: page.local_storage_keys.append("ncs.patient.session")
+        )
+        result = engine.execute_step(
+            actor={"name": "Patient", "landing_route": "#/patient/welcome", "qr_token": "DEMO-ER-101-A"},
+            step={
+                "id": "patient-login",
+                "action": "patient_qr_login",
+                "route": "#/patient/scan",
+                "assertion": {"type": "url_contains", "value": "/#/patient/welcome"},
+            },
+            page=page,
+            runtime_session={
+                "network_events": [
+                    {
+                        "tab_id": "main",
+                        "kind": "request-finished",
+                        "url": "http://127.0.0.1:8000/api/v1/patient/session/init",
+                        "method": "POST",
+                        "status": 200,
+                    }
+                ]
+            },
+            base_url="http://127.0.0.1:9200",
+            selectors={"patient_scan": {"token": 'input[type="text"]', "submit": 'button[type="submit"]'}},
+            artifact_dir=Path.cwd(),
+            timeout_ms=1000,
+        )
+        self.assertEqual("passed", result["status"])
+        self.assertEqual(welcome_url, page.url)
+
+    def test_patient_qr_login_retries_once_after_retryable_bootstrap_failure(self):
+        engine = AutomationEngine()
+        page = _FakePage()
+        context = _FakeContext()
+        context.cookie_items = [
+            {"name": "XSRF-TOKEN"},
+            {"name": "ncs_session"},
+        ]
+        page.context = context
+        scan_url = "http://127.0.0.1:9200/#/patient/scan"
+        welcome_url = "http://127.0.0.1:9200/#/patient/welcome"
+        services_url = "http://127.0.0.1:9200/#/patient/services"
+        page.route_behaviors[scan_url] = {
+            "url": scan_url,
+            "visible_selectors": {'input[type="text"]', 'button[type="submit"]'},
+            "body_text": "Scan",
+        }
+        page.submit_redirect = "http://127.0.0.1:9200/#/patient/session-expired"
+        page.timeout_hooks.extend(
+            [
+                lambda: setattr(page, "submit_redirect", welcome_url),
+                lambda: page.local_storage_keys.append("ncs.patient.session"),
+            ]
+        )
+        result = engine.execute_step(
+            actor={"name": "Patient", "landing_route": "#/patient/welcome", "qr_token": "DEMO-ER-101-A"},
+            step={
+                "id": "patient-login",
+                "action": "patient_qr_login",
+                "route": "#/patient/scan",
+                "assertion": {"type": "url_contains", "value": "/#/patient/welcome"},
+            },
+            page=page,
+            runtime_session={
+                "network_events": [
+                    {
+                        "tab_id": "main",
+                        "kind": "request-failed",
+                        "url": "http://127.0.0.1:8000/sanctum/csrf-cookie",
+                        "method": "GET",
+                        "failure": None,
+                    },
+                    {
+                        "tab_id": "main",
+                        "kind": "request-failed",
+                        "url": "http://127.0.0.1:8000/api/v1/patient/session/init",
+                        "method": "POST",
+                        "failure": None,
+                    },
+                ]
+            },
+            base_url="http://127.0.0.1:9200",
+            selectors={"patient_scan": {"token": 'input[type="text"]', "submit": 'button[type="submit"]'}},
+            artifact_dir=Path.cwd(),
+            timeout_ms=1000,
+        )
+
+        self.assertEqual("passed", result["status"])
+        self.assertEqual(welcome_url, page.url)
+
+    def test_patient_navigate_stabilizes_before_waiting_for_services_selector(self):
+        engine = AutomationEngine()
+        page = _FakePage()
+        context = _FakeContext()
+        context.cookie_items = [
+            {"name": "XSRF-TOKEN"},
+            {"name": "ncs_session"},
+        ]
+        page.context = context
+        services_url = "http://127.0.0.1:9200/#/patient/services"
+        page.route_behaviors[services_url] = {
+            "url": services_url,
+            "visible_selectors": {".patient-service-card"},
+            "body_text": "Services",
+        }
+        page.local_storage_keys = ["ncs.patient.session"]
+
+        result = engine.execute_step(
+            actor={"name": "Patient", "kind": "patient", "landing_route": "#/patient/welcome"},
+            step={
+                "id": "patient-open-services",
+                "action": "navigate",
+                "route": "#/patient/services",
+                "wait_for_selector_key": "patient_services.service_card",
+                "assertion": {"type": "url_contains", "value": "/#/patient/services"},
+            },
+            page=page,
+            runtime_session={
+                "network_events": [
+                    {
+                        "tab_id": "main",
+                        "kind": "request-finished",
+                        "url": "http://127.0.0.1:8000/api/v1/patient/session/init",
+                        "method": "POST",
+                        "status": 200,
+                    }
+                ]
+            },
+            base_url="http://127.0.0.1:9200",
+            selectors={"patient_services": {"service_card": ".patient-service-card"}},
+            artifact_dir=Path.cwd(),
+            timeout_ms=1000,
+        )
+
+        self.assertEqual("passed", result["status"])
+        self.assertEqual(services_url, page.url)
+
     def test_capture_step_screenshot_uses_step_settle_ms(self):
         engine = AutomationEngine()
         page = _FakePage()
@@ -240,6 +650,167 @@ class LabHardeningTests(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
         self.assertEqual(700, page.last_wait_timeout)
+
+    def test_assert_state_can_compare_badge_count_to_remembered_baseline(self):
+        engine = AutomationEngine()
+        page = _FakePage()
+        page.url = "http://127.0.0.1:9200/#/nurse/performance"
+        page.calls_badges = ["3"]
+        runtime_session = {"network_events": [], "state_memory": {}}
+        tmp = self._workspace_temp_dir()
+        try:
+            baseline = engine.execute_step(
+                actor={"name": "Nurse"},
+                step={
+                    "id": "baseline",
+                    "action": "assert_state",
+                    "_step_index": 1,
+                    "remember_as": "outside_calls_baseline",
+                    "checks": [{"kind": "url_contains", "value": "/#/nurse/performance"}],
+                },
+                page=page,
+                runtime_session=runtime_session,
+                base_url="http://127.0.0.1:9200",
+                selectors={},
+                artifact_dir=tmp,
+                timeout_ms=1000,
+            )
+            result = engine.execute_step(
+                actor={"name": "Nurse"},
+                step={
+                    "id": "cleanup",
+                    "action": "assert_state",
+                    "_step_index": 2,
+                    "checks": [{"kind": "badge_count_matches_memory", "value": "outside_calls_baseline"}],
+                },
+                page=page,
+                runtime_session=runtime_session,
+                base_url="http://127.0.0.1:9200",
+                selectors={},
+                artifact_dir=tmp,
+                timeout_ms=1000,
+            )
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+        self.assertEqual("passed", baseline["status"])
+        self.assertEqual("passed", result["status"])
+
+    def test_finalize_run_record_marks_stale_queue_contamination_as_validation_invalid(self):
+        run_record = {
+            "scenario_name": "Stale queue demo",
+            "steps": [
+                {
+                    "status": "failed",
+                    "reason": "state-assertions-failed",
+                    "message": "calls badge count was 4, expected baseline 3 from outside_calls_baseline",
+                    "current_url": "http://127.0.0.1:9200/#/nurse/performance",
+                    "observations": {"auth_surface": "app-surface"},
+                    "index": 3,
+                    "actor": "Nurse ER",
+                    "id": "cleanup",
+                }
+            ],
+            "actor_sessions": [
+                {
+                    "actor_name": "Nurse ER",
+                    "final_url": "http://127.0.0.1:9200/#/nurse/performance",
+                }
+            ],
+        }
+
+        finalized = finalize_run_record(run_record)
+
+        self.assertEqual("validation-invalid", finalized["status"])
+        self.assertIn("stale-queue-contamination", finalized["validation_invalid_reasons"])
+
+    def test_assert_state_writes_snapshot_artifact(self):
+        engine = AutomationEngine()
+        page = _FakePage()
+        page.url = "http://127.0.0.1:9200/#/nurse/performance"
+        page.lifecycle_banner_texts = ["New call request\nOpen calls"]
+        page.calls_badges = ["1"]
+        context = _FakeContext()
+        context.cookie_items = [
+            {"name": "XSRF-TOKEN"},
+            {"name": "ncs_session"},
+            {"name": "other-cookie"},
+        ]
+        page.context = context
+        tmp = self._workspace_temp_dir()
+        try:
+            result = engine.execute_step(
+                actor={"name": "Nurse"},
+                step={
+                    "id": "nurse-cta",
+                    "action": "assert_state",
+                    "_step_index": 4,
+                    "checks": [
+                        {"kind": "url_contains", "value": "/#/nurse/performance"},
+                        {"kind": "text_present", "value": "Open calls"},
+                        {"kind": "badge_count_at_least", "value": 1},
+                    ],
+                },
+                page=page,
+                runtime_session={"network_events": []},
+                base_url="http://127.0.0.1:9200",
+                selectors={},
+                artifact_dir=tmp,
+                timeout_ms=1000,
+            )
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+        self.assertEqual("passed", result["status"])
+        self.assertTrue(result["artifact_path"].endswith("04-nurse-cta-state.json"))
+        self.assertIn("XSRF-TOKEN", result["observations"]["session_cookie_names"])
+        self.assertIn("ncs_session", result["observations"]["session_cookie_names"])
+
+    def test_environment_ready_checks_frontend_and_backend(self):
+        store = _DummyStore()
+        app_config = dict(DEFAULT_APP_CONFIG)
+        with patch("run_notification_audit._http_ready", side_effect=[True, True]):
+            ensure_environment_ready(store, app_config)
+
+    def test_open_tab_registers_new_tab_in_runtime_session(self):
+        engine = AutomationEngine()
+        context = _FakeContext()
+        context.cookie_items = [
+            {"name": "XSRF-TOKEN"},
+            {"name": "ncs_session"},
+        ]
+        context.pages[0].local_storage_keys = ["ncs.staff.user", "ncs.staff.auth_mode"]
+        context.pages[0].visible_selectors = {".staff-shell-layout"}
+        runtime_session = {"context": context, "tabs": {"main": context.pages[0]}, "active_tab_id": "main", "network_events": []}
+        fresh_tab = context.new_page
+
+        def new_page_with_auth():
+            page = fresh_tab()
+            page.local_storage_keys = ["ncs.staff.user", "ncs.staff.auth_mode"]
+            page.visible_selectors = {".staff-shell-layout"}
+            return page
+
+        context.new_page = new_page_with_auth
+        result = engine.execute_step(
+            actor={"name": "Nurse"},
+            step={
+                "id": "open-calls-tab",
+                "action": "open_tab",
+                "route": "#/nurse/calls",
+                "target_tab_id": "calls",
+                "assertion": {"type": "url_contains", "value": "/#/nurse/calls"},
+            },
+            page=context.pages[0],
+            runtime_session=runtime_session,
+            base_url="http://127.0.0.1:9200",
+            selectors={},
+            artifact_dir=Path.cwd(),
+            timeout_ms=1000,
+        )
+
+        self.assertEqual("passed", result["status"])
+        self.assertIn("calls", runtime_session["tabs"])
+        self.assertEqual("calls", runtime_session["active_tab_id"])
 
     def test_open_actor_session_retries_once_for_recoverable_launch_issue(self):
         engine = AutomationEngine()
@@ -680,6 +1251,7 @@ class _DummyStore:
     def __init__(self) -> None:
         self._history = []
         self._active_sessions = []
+        self._projects = [{"id": "ncs", "api_base_url": "http://127.0.0.1:8000/api/v1"}]
 
     def load_active_sessions(self):
         return list(self._active_sessions)
@@ -692,6 +1264,9 @@ class _DummyStore:
 
     def save_run_history(self, history) -> None:
         self._history = list(history)
+
+    def load_projects(self):
+        return list(self._projects)
 
 
 class _FakeContinuityEngine:

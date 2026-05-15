@@ -18,6 +18,7 @@ def main() -> int:
     parser.add_argument("--base-url", default=None)
     parser.add_argument("--chrome-path", default=None)
     parser.add_argument("--launch-mode", choices=["browser", "app"], default=None)
+    parser.add_argument("--headless", action="store_true", help="Run Playwright automation in headless mode.")
     parser.add_argument("--keep-open", action="store_true", help="Reopen participant windows after automated execution finishes.")
     parser.add_argument("--reset-profiles", action="store_true", help="Reset the scenario participant profiles before running.")
     args = parser.parse_args()
@@ -37,6 +38,8 @@ def main() -> int:
         app_config["base_url"] = args.base_url
     if args.chrome_path:
         app_config["chrome_path"] = args.chrome_path
+    if args.headless:
+        app_config["headless_automation"] = True
 
     chrome_path = app_config.get("chrome_path", "")
     if not chrome_path or not Path(chrome_path).exists():

@@ -42,13 +42,20 @@ def build_scenario_plan(scenario: dict, profiles: list[dict], mode: str) -> list
                 "guidance": step.get("guidance", ""),
                 "assertion": deepcopy(step.get("assertion", {})),
                 "route": step.get("route", ""),
+                "post_login_route": step.get("post_login_route", ""),
                 "selector": step.get("selector", ""),
+                "selector_index": step.get("selector_index"),
                 "selector_key": step.get("selector_key", ""),
                 "wait_for_selector": step.get("wait_for_selector", ""),
                 "wait_for_selector_key": step.get("wait_for_selector_key", ""),
                 "wait_for_text": step.get("wait_for_text", ""),
                 "settle_ms": step.get("settle_ms"),
+                "wait_ms": step.get("wait_ms"),
+                "remember_as": step.get("remember_as", ""),
                 "screenshot": bool(step.get("screenshot")),
+                "tab_id": step.get("tab_id", ""),
+                "target_tab_id": step.get("target_tab_id", ""),
+                "checks": deepcopy(step.get("checks", [])),
                 "planned_status": planned_status,
             }
         )
@@ -283,11 +290,13 @@ class ScenarioRunner:
                             "message": continuity_note,
                         },
                     )
-                    page = runtime_session["page"]
+                    self._initialize_runtime_session(runtime_session)
+                    page = self._page_for_step(runtime_session, planned_step)
                     execution = self.engine.execute_step(
                         actor=actor,
                         step={**planned_step, "_step_index": index},
                         page=page,
+                        runtime_session=runtime_session,
                         base_url=self.app_config["base_url"],
                         selectors=self.selectors,
                         artifact_dir=artifact_dir,
@@ -327,11 +336,14 @@ class ScenarioRunner:
                     step_result["status"] = status
                     step_result["message"] = message
                     step_result["screenshot"] = screenshot_path
-                    actor_last_urls[actor["preset_id"]] = page.url
-                    step_result["current_url"] = page.url
+                    current_page = self._page_for_step(runtime_session, {})
+                    actor_last_urls[actor["preset_id"]] = execution.get("current_url") or current_page.url
+                    step_result["current_url"] = execution.get("current_url") or current_page.url
                     step_result["reason"] = execution.get("reason", "assertion-passed")
                     step_result["resolution"] = execution.get("resolution", "executed")
                     step_result["failure_category"] = execution.get("failure_category", "")
+                    step_result["artifact"] = execution.get("artifact_path", "")
+                    step_result["observations"] = execution.get("observations", {})
                     step_result["evidence_type"] = "routine-step" if screenshot_path else ""
                     step_result["best_evidence"] = self._should_mark_best_evidence(plan=plan, step_index=index - 1, step_result=step_result)
                     runtime_session["steps"].append(planned_step["id"])
@@ -355,6 +367,8 @@ class ScenarioRunner:
                     )
                 except Exception as exc:  # noqa: BLE001 - surface honest operator feedback
                     failure_path = ""
+                    failure_artifact = ""
+                    failure_observations = {}
                     session = actor_runtime_sessions.get(actor["participant_id"])
                     if session:
                         try:
@@ -371,6 +385,21 @@ class ScenarioRunner:
                             )
                         except Exception:  # noqa: BLE001 - best-effort failure capture only
                             failure_path = ""
+                        try:
+                            failure_observations = self.engine.capture_state_snapshot(page=session["page"], runtime_session=session)
+                            failure_artifact = str(
+                                self.engine.write_state_snapshot(
+                                    artifact_dir=artifact_dir,
+                                    step=planned_step,
+                                    step_index=index,
+                                    snapshot=failure_observations,
+                                    checks=[],
+                                    failures=[str(exc)],
+                                )
+                            )
+                        except Exception:  # noqa: BLE001 - failure evidence should stay best-effort
+                            failure_observations = {}
+                            failure_artifact = ""
                         actor_last_urls[actor["preset_id"]] = getattr(session.get("page"), "url", "") or actor_last_urls.get(actor["preset_id"], "")
                         step_result["current_url"] = actor_last_urls[actor["preset_id"]]
                     step_result["status"] = "failed"
@@ -379,6 +408,8 @@ class ScenarioRunner:
                     step_result["reason"] = str(exc)
                     step_result["resolution"] = "failed"
                     step_result["failure_category"] = "execution-failed"
+                    step_result["artifact"] = failure_artifact
+                    step_result["observations"] = failure_observations
                     step_result["evidence_type"] = "failure"
                     step_result["best_evidence"] = True
                     self._emit(
@@ -398,10 +429,12 @@ class ScenarioRunner:
             if actor_runtime_sessions:
                 run_record["actor_sessions"] = []
                 for actor_index, session in enumerate(actor_runtime_sessions.values(), start=1):
+                    self._initialize_runtime_session(session)
+                    active_page = self._page_for_step(session, {})
                     final_url = actor_last_urls.get(session["preset_id"], "")
                     final_screenshot = str(
                         self.engine.capture_actor_state_screenshot(
-                            page=session["page"],
+                            page=active_page,
                             artifact_dir=artifact_dir,
                             actor_slug=session["participant_id"],
                             actor_index=actor_index,
@@ -578,6 +611,8 @@ class ScenarioRunner:
             "screenshot": "",
             "index": index,
             "current_url": "",
+            "artifact": "",
+            "observations": {},
             "evidence_type": "",
             "best_evidence": False,
         }
@@ -608,11 +643,89 @@ class ScenarioRunner:
                 "total_steps": total_steps,
                 "screenshot": step_result.get("screenshot", ""),
                 "current_url": step_result.get("current_url", ""),
+                "artifact": step_result.get("artifact", ""),
                 "reason": step_result.get("reason", ""),
                 "resolution": step_result.get("resolution", ""),
                 "action": step_result.get("action", ""),
             },
         )
+
+    def _initialize_runtime_session(self, runtime_session: dict) -> None:
+        runtime_session.setdefault("tabs", {"main": runtime_session["page"]})
+        runtime_session.setdefault("active_tab_id", "main")
+        runtime_session.setdefault("network_events", [])
+        runtime_session.setdefault("state_memory", {})
+        runtime_session.setdefault("_observed_pages", set())
+        for tab_id, page in runtime_session.get("tabs", {}).items():
+            self._attach_page_observers(runtime_session=runtime_session, page=page, tab_id=tab_id)
+
+    def _page_for_step(self, runtime_session: dict, planned_step: dict):
+        self._initialize_runtime_session(runtime_session)
+        tab_id = planned_step.get("tab_id") or runtime_session.get("active_tab_id") or "main"
+        page = runtime_session["tabs"].get(tab_id)
+        if page is None:
+            raise RuntimeError(f"Tab {tab_id!r} is not available for this actor session.")
+        runtime_session["active_tab_id"] = tab_id
+        return page
+
+    def _attach_page_observers(self, *, runtime_session: dict, page, tab_id: str) -> None:
+        if not hasattr(page, "on"):
+            return
+
+        observed_pages = runtime_session.setdefault("_observed_pages", set())
+        page_identity = id(page)
+        if page_identity in observed_pages:
+            return
+
+        def log_request_finished(request):
+            try:
+                url = request.url
+            except Exception:
+                return
+            if "/api/v1/" not in url and "/broadcasting/auth" not in url and "/app/" not in url and "/sanctum/" not in url:
+                return
+            response = None
+            try:
+                response = request.response()
+            except Exception:
+                response = None
+            runtime_session["network_events"] = (
+                runtime_session.get("network_events", [])
+                + [{
+                    "tab_id": tab_id,
+                    "kind": "request-finished",
+                    "url": url,
+                    "method": getattr(request, "method", ""),
+                    "status": getattr(response, "status", None),
+                }]
+            )[-120:]
+
+        def log_request_failed(request):
+            try:
+                url = request.url
+            except Exception:
+                return
+            if "/api/v1/" not in url and "/broadcasting/auth" not in url and "/app/" not in url and "/sanctum/" not in url:
+                return
+            failure = None
+            try:
+                failure = request.failure()
+            except Exception:
+                failure = None
+            runtime_session["network_events"] = (
+                runtime_session.get("network_events", [])
+                + [{
+                    "tab_id": tab_id,
+                    "kind": "request-failed",
+                    "url": url,
+                    "method": getattr(request, "method", ""),
+                    "failure": getattr(failure, "error_text", None),
+                }]
+            )[-120:]
+
+        page.on("requestfinished", log_request_finished)
+        page.on("requestfailed", log_request_failed)
+        observed_pages.add(page_identity)
 
     def _ensure_actor_runtime_session(
         self,

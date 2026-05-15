@@ -55,8 +55,9 @@ ActorHarbor uses truthful result states:
 - `passed-with-recovery`
 - `manual-review`
 - `failed`
+- `validation-invalid`
 
-That means a scenario can intentionally end in manual review if the last checkpoint still requires human judgment.
+That means a scenario can intentionally end in manual review if the last checkpoint still requires human judgment, and it can end in `validation-invalid` when the authenticated/runtime surface was not trustworthy enough to judge the product honestly.
 
 ## 6. Know where to go next
 
